@@ -10,168 +10,71 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module Crypto.Cipher.Types
     (
-    -- * Keys Types
-      Key
-    , Key64
-    , Key128
-    , Key192
-    , Key256
-    -- * Keys Constructors
+    -- * Cipher classes
+      Cipher(..)
+    , BlockCipher(..)
+    , StreamCipher(..)
+    -- * Key type and constructor
+    , Key
     , key
-    , key64
-    , key128
-    , key192
-    , key256
-    , InvalidKeySize(..)
-    -- * Initial Vectors Types
-    , IV(..)
-    , IV64
-    , IV128
-    , IV256
-    -- * Initial Vectors Constructors
-    , iv64
-    , iv128
-    , iv256
-    , InvalidIVSize(..)
+    -- * Initial Vector type and constructor
+    , IV
+    , iv
+    -- * Block type
+    , Block(..)
+    , block
     -- * Authentification Tag
     , AuthTag(..)
     ) where
 
 import Data.SecureMem
-import Control.Exception (Exception, throw)
-import Data.Data
+--import Control.Exception (Exception, throw)
+--import Data.Data
 import Data.ByteString as B
 import Data.Byteable
 
--- | arbitrary sized key
-newtype Key = Key SecureMem
-    deriving (Eq)
+-- | Symmetric cipher class.
+class Cipher cipher where
+    -- | Initialize a cipher context from a key
+    cipherInit    :: Key cipher -> cipher
+    -- | return the size of the key required for this cipher.
+    -- Some cipher accept any size for key
+    cipherKeySize :: cipher -> Maybe Int
 
--- | 64 bits key
-newtype Key64 = Key64 SecureMem
-    deriving (Eq)
+-- | Symmetric block cipher class
+class Cipher cipher => BlockCipher cipher where
+    -- | Return the size of block required for this block cipher
+    blockSize    :: cipher -> Int
+    -- | Encrypt one block using the block cipher
+    blockEncrypt :: cipher -> Block cipher -> Block cipher
+    -- | Decrypt one block using the block cipher
+    blockDecrypt :: cipher -> Block cipher -> Block cipher
 
--- | 128 bits key
-newtype Key128 = Key128 SecureMem
-    deriving (Eq)
+-- | Symmetric stream cipher class
+class Cipher cipher => StreamCipher cipher where
+    -- | Encrypt using the stream cipher
+    streamEncrypt :: cipher -> ByteString -> (ByteString, cipher)
+    -- | Decrypt using the stream cipher
+    streamDecrypt :: cipher -> ByteString -> (ByteString, cipher)
 
--- | 192 bits key
-newtype Key192 = Key192 SecureMem
-    deriving (Eq)
+-- | Block is a bytestring of a specific size through the parametrized c
+newtype Block c = Block ByteString
 
--- | 256 bits key
-newtype Key256 = Key256 SecureMem
-    deriving (Eq)
+instance Byteable (Block c) where
+    toBytes (Block blk) = blk
 
--- | Invalid Key size exception raised if key is not of proper size.
---
--- the first argument is the expected size and the second is the
--- received size.
-data InvalidKeySize = InvalidKeySize Int Int
-    deriving (Show,Eq,Typeable)
+-- | a Key parametrized by the cipher
+newtype Key c = Key SecureMem deriving (Eq)
 
-instance Exception InvalidKeySize
-
--- | Create an arbitrary size Key
-key :: ByteString -> Key
-key b = Key $ toSecureMem b
-
--- | Create a 64 bit Key
-key64 :: ByteString -> Key64
-key64 b
-    | B.length b == 8 = Key64 $ toSecureMem b
-    | otherwise       = throw $ InvalidKeySize 8 (B.length b)
-
--- | Create a 128 bit Key
-key128 :: ByteString -> Key128
-key128 b
-    | B.length b == 16 = Key128 $ toSecureMem b
-    | otherwise        = throw $ InvalidKeySize 16 (B.length b)
-
--- | Create a 192 bit Key
-key192 :: ByteString -> Key192
-key192 b
-    | B.length b == 24 = Key192 $ toSecureMem b
-    | otherwise        = throw $ InvalidKeySize 24 (B.length b)
-
--- | Create a 256 bit Key
-key256 :: ByteString -> Key256
-key256 b
-    | B.length b == 32 = Key256 $ toSecureMem b
-    | otherwise        = throw $ InvalidKeySize 32 (B.length b)
-
-instance ToSecureMem Key where
+instance ToSecureMem (Key c) where
     toSecureMem (Key sm) = sm
-instance ToSecureMem Key64 where
-    toSecureMem (Key64 sm) = sm
-instance ToSecureMem Key128 where
-    toSecureMem (Key128 sm) = sm
-instance ToSecureMem Key192 where
-    toSecureMem (Key192 sm) = sm
-instance ToSecureMem Key256 where
-    toSecureMem (Key256 sm) = sm
-instance Byteable Key where
+instance Byteable (Key c) where
     toBytes (Key sm) = toBytes sm
-instance Byteable Key64 where
-    toBytes (Key64 sm) = toBytes sm
-instance Byteable Key128 where
-    toBytes (Key128 sm) = toBytes sm
-instance Byteable Key192 where
-    toBytes (Key192 sm) = toBytes sm
-instance Byteable Key256 where
-    toBytes (Key256 sm) = toBytes sm
 
--- | arbitrary size IV
-newtype IV = IV ByteString
-    deriving (Eq)
-
--- | 64 bits IV
-newtype IV64 = IV64 ByteString
-    deriving (Eq)
-
--- | 128 bits IV
-newtype IV128 = IV128 ByteString
-    deriving (Eq)
-
--- | 256 bits IV
-newtype IV256 = IV256 ByteString
-    deriving (Eq)
-
--- | Invalid IV size exception raised if IV is not of proper size.
---
--- the first argument is the expected size and the second is the
--- received size.
-data InvalidIVSize = InvalidIVSize Int Int
-    deriving (Show,Eq,Typeable)
-
-instance Exception InvalidIVSize
-
--- | Create a 64 bits IV from a bytestring
-iv64 :: ByteString -> IV64
-iv64 b
-    | B.length b == 8 = IV64 b
-    | otherwise       = throw $ InvalidIVSize 8 (B.length b)
-
--- | Create a 128 bits IV from a bytestring
-iv128 :: ByteString -> IV128
-iv128 b
-    | B.length b == 16 = IV128 b
-    | otherwise        = throw $ InvalidIVSize 16 (B.length b)
-
--- | Create a 256 bits IV from a bytestring
-iv256 :: ByteString -> IV256
-iv256 b
-    | B.length b == 32 = IV256 b
-    | otherwise        = throw $ InvalidIVSize 32 (B.length b)
-
-instance Byteable IV where
+-- | an IV parametrized by the cipher
+newtype IV c = IV ByteString deriving (Eq)
+instance Byteable (IV c) where
     toBytes (IV sm) = sm
-instance Byteable IV64 where
-    toBytes (IV64 sm) = sm
-instance Byteable IV128 where
-    toBytes (IV128 sm) = sm
-instance Byteable IV256 where
-    toBytes (IV256 sm) = sm
 
 -- | Authentification Tag for AE cipher mode
 newtype AuthTag = AuthTag ByteString
@@ -180,3 +83,31 @@ instance Eq AuthTag where
     (AuthTag a) == (AuthTag b) = constEqBytes a b
 instance Byteable AuthTag where
     toBytes (AuthTag bs) = bs
+
+-- | Create a block for a specified block cipher
+block :: (Byteable b, BlockCipher c) => b -> Maybe (Block c)
+block b = toBlock undefined
+  where toBlock :: BlockCipher c => c -> Maybe (Block c)
+        toBlock cipher
+          | byteableLength b == sz = Just (Block $ toBytes b)
+          | otherwise              = Nothing
+          where sz = blockSize cipher
+
+-- | Create an IV for a specified block cipher
+iv :: (Byteable b, BlockCipher c) => b -> Maybe (IV c)
+iv b = toIV undefined
+  where toIV :: BlockCipher c => c -> Maybe (IV c)
+        toIV cipher
+          | byteableLength b == sz = Just (IV $ toBytes b)
+          | otherwise              = Nothing
+          where sz = blockSize cipher
+
+-- | Create a Key for a specified cipher
+key :: (ToSecureMem b, Cipher c) => b -> Maybe (Key c)
+key b = toKey undefined (toSecureMem b)
+  where toKey :: Cipher c => c -> SecureMem -> Maybe (Key c)
+        toKey cipher sm =
+            case cipherKeySize cipher of
+                Nothing                           -> Just $ Key sm
+                Just sz | sz == byteableLength sm -> Just $ Key sm
+                        | otherwise               -> Nothing
